@@ -1,0 +1,192 @@
+local Players = game:GetService("Players")
+local UIS = game:GetService("UserInputService")
+local TweenService = game:GetService("TweenService")
+
+local player = Players.LocalPlayer
+local character = player.Character or player.CharacterAdded:Wait()
+local humanoid = character:WaitForChild("Humanoid")
+
+player.CharacterAdded:Connect(function(char)
+	character = char
+	humanoid = char:WaitForChild("Humanoid")
+end)
+
+-- SETTINGS
+local MIN_SPEED = 27
+local MAX_SPEED = 60
+
+local enabled = false
+local currentSpeed = MIN_SPEED
+
+-- DRAG STATES
+local draggingFrame = false
+local draggingSlider = false
+local dragStart
+local startPos
+
+-- UI
+local gui = Instance.new("ScreenGui")
+gui.Name = "SpeedUI"
+gui.ResetOnSpawn = false
+gui.Parent = player:WaitForChild("PlayerGui")
+
+local frame = Instance.new("Frame")
+frame.Size = UDim2.new(0, 240, 0, 150)
+frame.Position = UDim2.new(0.05, 0, 0.3, 0)
+frame.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
+frame.BorderSizePixel = 0
+frame.Parent = gui
+Instance.new("UICorner", frame).CornerRadius = UDim.new(0, 10)
+
+-- pop-in animation
+frame.Size = UDim2.new(0, 0, 0, 0)
+TweenService:Create(frame, TweenInfo.new(0.35, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
+	Size = UDim2.new(0, 240, 0, 150)
+}):Play()
+
+-- TITLE
+local title = Instance.new("TextLabel")
+title.Size = UDim2.new(1, 0, 0, 30)
+title.BackgroundTransparency = 1
+title.Text = "SPEED CONTROL"
+title.TextColor3 = Color3.fromRGB(255, 255, 255)
+title.Font = Enum.Font.GothamBold
+title.TextSize = 14
+title.Parent = frame
+
+-- BUTTON
+local button = Instance.new("TextButton")
+button.Size = UDim2.new(1, -20, 0, 35)
+button.Position = UDim2.new(0, 10, 0, 40)
+button.Text = "TOGGLE SPEED: OFF"
+button.BackgroundColor3 = Color3.fromRGB(45, 45, 45)
+button.TextColor3 = Color3.fromRGB(255, 255, 255)
+button.Font = Enum.Font.Gotham
+button.TextSize = 13
+button.AutoButtonColor = false
+button.Parent = frame
+Instance.new("UICorner", button).CornerRadius = UDim.new(0, 8)
+
+-- hover effect
+local function hover(btn)
+	btn.MouseEnter:Connect(function()
+		TweenService:Create(btn, TweenInfo.new(0.15), {
+			BackgroundColor3 = Color3.fromRGB(70, 70, 70)
+		}):Play()
+	end)
+
+	btn.MouseLeave:Connect(function()
+		local color = enabled and Color3.fromRGB(0, 170, 255) or Color3.fromRGB(45, 45, 45)
+		TweenService:Create(btn, TweenInfo.new(0.15), {
+			BackgroundColor3 = color
+		}):Play()
+	end)
+end
+hover(button)
+
+-- SLIDER BAR
+local bar = Instance.new("Frame")
+bar.Size = UDim2.new(1, -20, 0, 10)
+bar.Position = UDim2.new(0, 10, 0, 95)
+bar.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
+bar.BorderSizePixel = 0
+bar.Parent = frame
+Instance.new("UICorner", bar).CornerRadius = UDim.new(1, 0)
+
+-- KNOB
+local knob = Instance.new("Frame")
+knob.Size = UDim2.new(0, 16, 0, 16)
+knob.Position = UDim2.new(0, 0, 0.5, -8)
+knob.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+knob.BorderSizePixel = 0
+knob.Parent = bar
+Instance.new("UICorner", knob).CornerRadius = UDim.new(1, 0)
+
+-- VALUE TEXT
+local valueLabel = Instance.new("TextLabel")
+valueLabel.Size = UDim2.new(0, 60, 0, 20)
+valueLabel.BackgroundTransparency = 1
+valueLabel.Text = tostring(MIN_SPEED)
+valueLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+valueLabel.Font = Enum.Font.GothamBold
+valueLabel.TextSize = 12
+valueLabel.Parent = knob
+valueLabel.Position = UDim2.new(0.5, -30, -1.2, 0)
+
+-- UPDATE SPEED
+local function updateSpeed(percent)
+	currentSpeed = math.floor(MIN_SPEED + (MAX_SPEED - MIN_SPEED) * percent)
+	valueLabel.Text = tostring(currentSpeed)
+
+	if enabled then
+		humanoid.WalkSpeed = currentSpeed
+	end
+end
+
+local function moveKnob(x)
+	TweenService:Create(knob, TweenInfo.new(0.05), {
+		Position = UDim2.new(x, 0, 0.5, -8)
+	}):Play()
+end
+
+-- FRAME DRAG (BLOCKED WHEN SLIDER IS USED)
+frame.InputBegan:Connect(function(input)
+	if input.UserInputType == Enum.UserInputType.MouseButton1 and not draggingSlider then
+		draggingFrame = true
+		dragStart = input.Position
+		startPos = frame.Position
+	end
+end)
+
+UIS.InputEnded:Connect(function(input)
+	if input.UserInputType == Enum.UserInputType.MouseButton1 then
+		draggingFrame = false
+		draggingSlider = false
+	end
+end)
+
+UIS.InputChanged:Connect(function(input)
+	if draggingFrame and not draggingSlider and input.UserInputType == Enum.UserInputType.MouseMovement then
+		local delta = input.Position - dragStart
+		frame.Position = UDim2.new(
+			startPos.X.Scale,
+			startPos.X.Offset + delta.X,
+			startPos.Y.Scale,
+			startPos.Y.Offset + delta.Y
+		)
+	end
+
+	if draggingSlider and input.UserInputType == Enum.UserInputType.MouseMovement then
+		local x = math.clamp((input.Position.X - bar.AbsolutePosition.X) / bar.AbsoluteSize.X, 0, 1)
+		moveKnob(x)
+		updateSpeed(x)
+	end
+end)
+
+-- SLIDER START DRAG
+bar.InputBegan:Connect(function(input)
+	if input.UserInputType == Enum.UserInputType.MouseButton1 then
+		draggingSlider = true
+	end
+end)
+
+-- TOGGLE BUTTON
+button.MouseButton1Click:Connect(function()
+	enabled = not enabled
+
+	if enabled then
+		button.Text = "TOGGLE SPEED: ON"
+		TweenService:Create(button, TweenInfo.new(0.2), {
+			BackgroundColor3 = Color3.fromRGB(0, 170, 255)
+		}):Play()
+
+		humanoid.WalkSpeed = currentSpeed
+	else
+		button.Text = "TOGGLE SPEED: OFF"
+		TweenService:Create(button, TweenInfo.new(0.2), {
+			BackgroundColor3 = Color3.fromRGB(45, 45, 45)
+		}):Play()
+
+		humanoid.WalkSpeed = 16
+	end
+end)
